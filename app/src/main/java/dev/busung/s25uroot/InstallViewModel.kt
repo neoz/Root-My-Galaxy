@@ -197,12 +197,8 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 setPhase(InstallPhase.Exploiting, app.getString(R.string.status_exploit_running))
                 executeExploit(payloads.exploit)
 
-                if (payloads.kernelSu == null) {
-                    appendLog("[*] dev fork: profile has no KernelSU artifact, skipping late-load")
-                } else {
-                    setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
-                    installKernelSu(payloads)
-                }
+                setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
+                installKernelSu(payloads)
 
                 setPhase(InstallPhase.Installed, app.getString(R.string.status_ksu_active))
                 appendLog(app.getString(R.string.log_install_complete))
@@ -341,7 +337,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun installKernelSu(payloads: VerifiedPayloads) {
-        val kernelSu = payloads.kernelSu ?: return
+        val kernelSu = payloads.kernelSu
         if (shizukuEnabled()) {
             shizukuStage(kernelSu, SHIZUKU_KSUD_PATH, "755")
             shizukuStage(kernelSu, SHIZUKU_KSUD_STAGE_PATH, "755")

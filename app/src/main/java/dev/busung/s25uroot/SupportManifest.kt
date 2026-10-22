@@ -14,7 +14,7 @@ data class TargetProfile(
     val models: Set<String>,
     val kernelVersions: Set<String>,
     val exploit: RemoteArtifact,
-    val kernelSu: RemoteArtifact?,
+    val kernelSu: RemoteArtifact,
 ) {
     init {
         require(models.isNotEmpty()) { "Payload must support at least one model" }
@@ -51,7 +51,7 @@ data class SupportManifest(
                 for (index in 0 until payloadsJson.length()) {
                     val payload = payloadsJson.getJSONObject(index)
                     val exploit = payload.getJSONObject("exploit")
-                    val kernelSu = payload.optJSONObject("kernelsu")
+                    val kernelSu = payload.getJSONObject("kernelsu")
                     add(
                         TargetProfile(
                             profileId = payload.getString("payloadId"),
@@ -62,12 +62,10 @@ data class SupportManifest(
                                 url = exploit.getString("url"),
                                 size = exploit.getLong("size"),
                             ),
-                            kernelSu = kernelSu?.let {
-                                RemoteArtifact(
-                                    url = it.getString("url"),
-                                    size = it.getLong("size"),
-                                )
-                            },
+                            kernelSu = RemoteArtifact(
+                                url = kernelSu.getString("url"),
+                                size = kernelSu.getLong("size"),
+                            ),
                         ),
                     )
                 }
