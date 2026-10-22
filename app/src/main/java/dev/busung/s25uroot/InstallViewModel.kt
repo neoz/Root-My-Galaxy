@@ -197,8 +197,12 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 setPhase(InstallPhase.Exploiting, app.getString(R.string.status_exploit_running))
                 executeExploit(payloads.exploit)
 
-                setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
-                installKernelSu(payloads)
+                if (payloads.kernelSu == null) {
+                    appendLog("[*] dev fork: profile has no KernelSU artifact, skipping late-load")
+                } else {
+                    setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
+                    installKernelSu(payloads)
+                }
 
                 setPhase(InstallPhase.Installed, app.getString(R.string.status_ksu_active))
                 appendLog(app.getString(R.string.log_install_complete))
@@ -337,12 +341,13 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun installKernelSu(payloads: VerifiedPayloads) {
+        val kernelSu = payloads.kernelSu ?: return
         if (shizukuEnabled()) {
-            shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_PATH, "755")
-            shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_STAGE_PATH, "755")
+            shizukuStage(kernelSu, SHIZUKU_KSUD_PATH, "755")
+            shizukuStage(kernelSu, SHIZUKU_KSUD_STAGE_PATH, "755")
             appendLog(app.getString(R.string.log_ksu_staged))
         } else {
-            val source = shellQuote(payloads.kernelSu.absolutePath)
+            val source = shellQuote(kernelSu.absolutePath)
             val stageCommand =
                 "/system/bin/cp $source $SHIZUKU_KSUD_PATH && " +
                     "/system/bin/cp $source $SHIZUKU_KSUD_STAGE_PATH && " +

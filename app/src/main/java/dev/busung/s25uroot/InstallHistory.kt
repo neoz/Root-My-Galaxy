@@ -23,20 +23,36 @@ data class InstallHistoryEntry(
 )
 
 class InstallHistoryStore(private val context: Context) {
-    private val directory = File(context.filesDir, "install-history").apply { mkdirs() }
+    private val directory = ensureDirectory()
 
-    fun load(): List<InstallHistoryEntry> = directory
-        .listFiles { file -> file.extension == "json" }
-        .orEmpty()
-        .mapNotNull(::decodeOrQuarantine)
-        .sortedByDescending(InstallHistoryEntry::startedAtMillis)
+    /*
+     * A kernel panic during an AtomicFile rewrite can leave unreadable
+     * directory entries.  History is cosmetic: repair what we can and never
+     * let it take the app down.
+     */
+    private fun ensureDirectory(): File {
+        val dir = File(context.filesDir, "install-history")
+        if (!dir.isDirectory) {
+            runCatching { dir.deleteRecursively() }
+            runCatching { dir.mkdirs() }
+        }
+        return dir
+    }
+
+    fun load(): List<InstallHistoryEntry> = runCatching {
+        directory
+            .listFiles { file -> file.extension == "json" }
+            .orEmpty()
+            .mapNotNull(::decodeOrQuarantine)
+            .sortedByDescending(InstallHistoryEntry::startedAtMillis)
+    }.getOrElse { emptyList() }
 
     fun closeInterruptedRuns(): List<InstallHistoryEntry> = load().map { entry ->
         if (entry.result == InstallRunResult.Running) {
             entry.copy(
                 completedAtMillis = System.currentTimeMillis(),
                 result = InstallRunResult.Failed,
-            ).also(::save)
+            ).also { runCatching { save(it) } }
         } else {
             entry
         }
@@ -52,17 +68,19 @@ class InstallHistoryStore(private val context: Context) {
     ).also(::save)
 
     fun save(entry: InstallHistoryEntry) {
-        val target = File(directory, "${entry.id}.json")
-        val atomicFile = AtomicFile(target)
-        val output = atomicFile.startWrite()
-        try {
-            output.write(encode(entry).toString().toByteArray(Charsets.UTF_8))
-            output.flush()
-            output.fd.sync()
-            atomicFile.finishWrite(output)
-        } catch (error: Throwable) {
-            atomicFile.failWrite(output)
-            throw error
+        runCatching {
+            val target = File(directory, "${entry.id}.json")
+            val atomicFile = AtomicFile(target)
+            val output = atomicFile.startWrite()
+            try {
+                output.write(encode(entry).toString().toByteArray(Charsets.UTF_8))
+                output.flush()
+                output.fd.sync()
+                atomicFile.finishWrite(output)
+            } catch (error: Throwable) {
+                atomicFile.failWrite(output)
+                throw error
+            }
         }
     }
 
